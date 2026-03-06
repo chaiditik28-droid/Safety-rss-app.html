@@ -469,26 +469,42 @@ async function loadFromSheets() {
   return [];
 }
 
+// ส่งข้อมูลผ่าน GET (วิธีเดียวที่ผ่าน CORS ได้จาก browser)
+function sheetsGET(payload) {
+  return new Promise((resolve) => {
+    try {
+      // ตัดรูปภาพออกก่อนส่ง (ใหญ่เกิน URL limit)
+      const p = Object.assign({}, payload);
+      if(p.item) {
+        const item = Object.assign({}, p.item);
+        delete item.imageBeforePreview;
+        delete item.imageAfterPreview;
+        p.item = item;
+      }
+      const encoded = encodeURIComponent(JSON.stringify(p));
+      const url = APPS_SCRIPT_URL + '?payload=' + encoded + '&t=' + Date.now();
+      const img = new Image();
+      img.onload = img.onerror = () => resolve();
+      setTimeout(resolve, 5000);
+      img.src = url;
+    } catch(e) { resolve(); }
+  });
+}
+
 async function saveToSheets(item) {
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {"Content-Type":"text/plain"},
-      body: JSON.stringify({ action: "add", item })
-    });
-  } catch(e) { console.warn("Sheets save error:", e); }
+  try { await sheetsGET({ action: "add", item }); }
+  catch(e) { console.warn("Sheets save error:", e); }
 }
 
 async function updateInSheets(item) {
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {"Content-Type":"text/plain"},
-      body: JSON.stringify({ action: "update", item })
-    });
-  } catch(e) { console.warn("Sheets update error:", e); }
+  try { await sheetsGET({ action: "update", item }); }
+  catch(e) { console.warn("Sheets update error:", e); }
+}
+
+async function deleteFromSheets(id) {
+  if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('วาง_URL')) return;
+  try { await sheetsGET({ action: "delete", id }); }
+  catch(e) { console.warn("Delete error:", e); }
 }
 
 // ===================== LOCAL CACHE (สำรอง) =====================
@@ -1139,20 +1155,11 @@ async function deleteItem(idx) {
   renderList();
 }
 
-async function deleteFromSheets(id) {
-  if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('วาง_URL')) return;
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: {"Content-Type":"text/plain"},
-      body: JSON.stringify({ action: "delete", id: id })
-    });
-  } catch(e) { console.warn("Delete error:", e); }
-}
+// deleteFromSheets defined above
 
 // ===================== UTIL =====================
 function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 </body>
 </html>
+        
