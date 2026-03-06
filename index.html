@@ -469,42 +469,34 @@ async function loadFromSheets() {
   return [];
 }
 
-// ส่งข้อมูลผ่าน GET (วิธีเดียวที่ผ่าน CORS ได้จาก browser)
-function sheetsGET(payload) {
+// ส่งข้อมูลไป Apps Script ผ่าน GET + script tag (ผ่าน CORS ได้ 100%)
+function sheetsPing(payload) {
   return new Promise((resolve) => {
+    if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('วาง_URL')){ resolve(); return; }
     try {
-      // ตัดรูปภาพออกก่อนส่ง (ใหญ่เกิน URL limit)
-      const p = Object.assign({}, payload);
-      if(p.item) {
-        const item = Object.assign({}, p.item);
-        delete item.imageBeforePreview;
-        delete item.imageAfterPreview;
-        p.item = item;
-      }
-      const encoded = encodeURIComponent(JSON.stringify(p));
-      const url = APPS_SCRIPT_URL + '?payload=' + encoded + '&t=' + Date.now();
-      const img = new Image();
-      img.onload = img.onerror = () => resolve();
-      setTimeout(resolve, 5000);
-      img.src = url;
+      const p = JSON.parse(JSON.stringify(payload));
+      if(p.item){ delete p.item.imageBeforePreview; delete p.item.imageAfterPreview; }
+      const cbName = '_cb_' + Date.now();
+      window[cbName] = () => { delete window[cbName]; s.remove(); resolve(); };
+      const url = APPS_SCRIPT_URL + '?payload=' + encodeURIComponent(JSON.stringify(p)) + '&callback=' + cbName + '&t=' + Date.now();
+      const s = document.createElement('script');
+      s.src = url;
+      s.onerror = () => { delete window[cbName]; s.remove(); resolve(); };
+      document.head.appendChild(s);
+      setTimeout(() => { delete window[cbName]; try{s.remove()}catch(e){} resolve(); }, 8000);
     } catch(e) { resolve(); }
   });
 }
 
 async function saveToSheets(item) {
-  try { await sheetsGET({ action: "add", item }); }
-  catch(e) { console.warn("Sheets save error:", e); }
+  await sheetsPing({ action: "add", item });
 }
-
 async function updateInSheets(item) {
-  try { await sheetsGET({ action: "update", item }); }
-  catch(e) { console.warn("Sheets update error:", e); }
+  await sheetsPing({ action: "update", item });
 }
-
 async function deleteFromSheets(id) {
   if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('วาง_URL')) return;
-  try { await sheetsGET({ action: "delete", id }); }
-  catch(e) { console.warn("Delete error:", e); }
+  await sheetsPing({ action: "delete", id });
 }
 
 // ===================== LOCAL CACHE (สำรอง) =====================
@@ -1155,11 +1147,10 @@ async function deleteItem(idx) {
   renderList();
 }
 
-// deleteFromSheets defined above
+
 
 // ===================== UTIL =====================
 function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 </body>
 </html>
-        
